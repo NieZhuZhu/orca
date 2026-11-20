@@ -1,11 +1,11 @@
 // Only a bot's Home holds the left of its page, so its side chats never pin, whichever path asks.
 import { readBots } from '@/lib/bot-catalog-snapshot'
-import { botOfHomeWorkspace } from '../../../../../shared/bots/bot-homes'
-import { isBotSideChatTab } from '../../../../../shared/bots/bot-home-tab'
+import { botHomeRuleApplies } from '@/lib/bot-host-capability'
+import { isBotSideChatTab, isHostedBotChatTab } from '../../../../../shared/bots/bot-home-tab'
 import type { TabsSlice, TabsSliceGet } from './tabs-slice-contract'
 import { findTabAndWorktree } from './tab-group-state'
 
-/** `pinTab` that leaves a bot's side chat unpinned; unpinning is never refused. */
+/** `pinTab` that leaves a bot's side chat unpinned where its host keeps the rule; unpinning is never refused. */
 export function refusingBotSideChats(
   get: TabsSliceGet,
   pinTab: TabsSlice['pinTab']
@@ -13,8 +13,16 @@ export function refusingBotSideChats(
   return (tabId, opts) => {
     const state = get()
     const tab = findTabAndWorktree(state.unifiedTabsByWorktree, tabId)?.tab
-    const bot = tab ? botOfHomeWorkspace(readBots(), tab.worktreeId) : null
-    if (tab && state.settings?.botsEnabled !== false && isBotSideChatTab(tab, bot)) {
+    // The tab's own host names its bot, so the same workspace id on two hosts cannot borrow a rule.
+    const bot = tab
+      ? (readBots().find((candidate) => isHostedBotChatTab(tab, candidate)) ?? null)
+      : null
+    if (
+      tab &&
+      state.settings?.botsEnabled !== false &&
+      isBotSideChatTab(tab, bot) &&
+      botHomeRuleApplies(bot, state)
+    ) {
       return
     }
     pinTab(tabId, opts)

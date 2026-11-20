@@ -13,18 +13,13 @@ import {
 } from '../../../shared/remote-runtime/host-status/runtime-host-status'
 import { normalizeMachineName } from '../../../shared/remote-runtime/host-metadata/machine-name'
 import type { RuntimeStatus } from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
+import { botHostHasCapability, pairedBotHostStatus } from './bot-host-capability'
 
-/** A paired server's last verified status; null for this app's own runtime, or before it is known. */
 function pairedStatus(
   hostId: ExecutionHostId,
   state: Pick<AppState, 'runtimeStatusByEnvironmentId'> = useAppStore.getState()
 ): RuntimeStatus | null {
-  const parsed = parseRoutableExecutionHostId(hostId)
-  if (parsed?.kind !== 'runtime') {
-    return null
-  }
-  const entry = state.runtimeStatusByEnvironmentId?.get(parsed.environmentId)
-  return lastVerifiedRuntimeStatus(entry) ?? null
+  return pairedBotHostStatus(hostId, state)
 }
 
 export function botHostMachineName(
@@ -62,12 +57,9 @@ export async function readBotHostStatus(
 export function botHostHas(
   hostId: ExecutionHostId,
   capability: string,
-  state?: Pick<AppState, 'runtimeStatusByEnvironmentId'>
+  state: Pick<AppState, 'runtimeStatusByEnvironmentId'> = useAppStore.getState()
 ): boolean {
-  if (parseRoutableExecutionHostId(hostId)?.kind === 'local') {
-    return true
-  }
-  return pairedStatus(hostId, state)?.capabilities?.includes(capability) === true
+  return botHostHasCapability(hostId, capability, state)
 }
 
 function runtimeEnvironmentId(hostId: ExecutionHostId): string | null {
