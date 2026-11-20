@@ -1031,6 +1031,7 @@ import {
   SkillUploadChunkRequestSchema,
   SkillUploadCommitRequestSchema
 } from '../skills/sharing/skill-upload-session-contract'
+import { ArchiveHookApprovalParams } from '../worktree/removal/archive-hook-decision'
 
 // Why: the host parses params with these schemas, so a client that matches this map
 // matches the dispatcher. Clients must import it for types only — parsing a params
@@ -2133,6 +2134,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'worktree.activate': WorktreeActivate,
   'worktree.adoptProvisionedRoot': WorktreeAdoptProvisionedRoot,
   'worktree.archive': WorktreeArchive,
+  'worktree.archiveHookApproval': ArchiveHookApprovalParams,
   'worktree.create': WorktreeCreate,
   'worktree.detectedList': WorktreeDetectedListParams,
   'worktree.forceDeleteBranch': WorktreeForceDeleteBranch,
