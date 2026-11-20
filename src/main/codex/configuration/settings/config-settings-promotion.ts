@@ -7,11 +7,7 @@ import { rewriteFileInPlace } from '../../../filesystem/in-place-file-rewrite'
 import { observeFilePublication } from '../../../filesystem/file-content-observation'
 import { assertGuardedFileCurrent } from '../../../filesystem/concurrent-file-edit-guard'
 import { parseWslUncPath } from '../../../../shared/file-access/wsl-paths'
-import {
-  getOrcaManagedCodexHomePath,
-  getOrcaUserDataPath,
-  getSystemCodexHomePath
-} from '../homes/codex-home-paths'
+import { getOrcaManagedCodexHomePath, getSystemCodexHomePath } from '../homes/codex-home-paths'
 import { upsertPromotedSettingsInContent } from './codex-config-settings-upsert'
 import {
   PROMOTED_STRUCTURED_KEYS,
@@ -192,11 +188,8 @@ function promoteCodexRuntimeSettingsToSystemUnsafe(
   if (targetExists && parseWslUncPath(writeTarget.path)) {
     // WSL 9P symlink metadata is unreliable; write through to preserve the guest inode.
     assertGuardedFileCurrent(writeTarget.path)
-    rewriteFileInPlace(
-      writeTarget.path,
-      nextContent,
-      () => assertGuardedFileCurrent(writeTarget.path),
-      join(getOrcaUserDataPath(), 'codex-config-backups')
+    rewriteFileInPlace(writeTarget.path, nextContent, () =>
+      assertGuardedFileCurrent(writeTarget.path)
     )
     observeFilePublication(writeTarget.path, nextContent)
     return { conflicts, runtimeValuesToPreserve, mirroredMcpServers, mirroredMcpServerRoot }

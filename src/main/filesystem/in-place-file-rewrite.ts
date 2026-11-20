@@ -1,77 +1,89 @@
-import { randomUUID } from 'node:crypto'
-import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
-import { join } from 'node:path'
+import {
+  closeSync,
+  fstatSync,
+  fsyncSync,
+  ftruncateSync,
+  openSync,
+  readSync,
+  statSync,
+  writeSync
+} from 'node:fs'
+
+function readAll(fd: number): Buffer {
+  const chunks: Buffer[] = []
+  let position = 0
+  for (;;) {
+    const chunk = Buffer.allocUnsafe(64 * 1024)
+    const bytesRead = readSync(fd, chunk, 0, chunk.length, position)
+    if (bytesRead === 0) {
+      return Buffer.concat(chunks)
+    }
+    chunks.push(chunk.subarray(0, bytesRead))
+    position += bytesRead
+  }
+}
+
+function writeAll(fd: number, bytes: Buffer): void {
+  let written = 0
+  while (written < bytes.length) {
+    written += writeSync(fd, bytes, written, bytes.length - written, written)
+  }
+}
+
+/** Whether `path` still names the file `fd` has open. */
+function namesOpenFile(path: string, fd: number): boolean {
+  const open = fstatSync(fd)
+  const named = statSync(path)
+  return open.dev === named.dev && open.ino === named.ino
+}
 
 /**
- * Rewrites a file in place, keeping its inode. An in-place write truncates first, so the old bytes
- * are copied to `backupFolder` (Orca's own data) beforehand: beside the file, a backup made from Windows in a
- * WSL home would get the guest's default permissions, wider than a config holding tokens.
- * A failed write puts them back only when the file still holds part of this write; the backup
- * stays when that can't be done, and goes once the file is whole again.
+ * Rewrites a file in place, keeping its inode, through one descriptor. A failed write puts the old
+ * bytes back through that same descriptor while the file holds only part of this write: a writer
+ * that replaced the file by rename meanwhile left this descriptor on the old file, so its save is
+ * never overwritten. The old bytes stay in memory only: no copy of the file is written anywhere.
  */
 export function rewriteFileInPlace(
   path: string,
   contents: string,
-  assertCurrent: () => void,
-  backupFolder: string
+  assertCurrent: () => void
 ): void {
-  assertCurrent()
-  const previous = readFileSync(path)
-  mkdirSync(backupFolder, { recursive: true, mode: 0o700 })
-  const backupPath = join(backupFolder, `${randomUUID()}.bak`)
+  const fd = openSync(path, 'r+')
   try {
-    writeFileSync(backupPath, previous, { mode: 0o600, flag: 'wx' })
-  } catch (error) {
-    removeBackup(backupPath)
-    throw error
-  }
-  let restored = true
-  let writing = false
-  try {
-    // Copying the backup takes a round trip: an outside save meanwhile wins over this write.
-    if (!readFileSync(path).equals(previous)) {
-      throw new Error(`File changed while Orca was about to rewrite it: ${path}`)
+    assertCurrent()
+    if (!namesOpenFile(path, fd)) {
+      throw new Error(`File replaced while Orca was about to rewrite it: ${path}`)
     }
-    writing = true
-    writeFileSync(path, contents, 'utf-8')
-  } catch (error) {
-    // Nothing was written before the write began, so there is nothing to put back.
-    restored = !writing || restoreAfterFailedRewrite(path, contents, previous)
-    if (!restored) {
-      console.warn('[config-rewrite] Kept the previous contents of', path, 'at', backupPath)
-    }
-    throw error
-  } finally {
-    if (restored) {
-      removeBackup(backupPath)
-    }
-  }
-}
-
-function removeBackup(backupPath: string): void {
-  try {
-    rmSync(backupPath, { force: true })
-  } catch {
-    // A leftover copy in Orca's own folder is harmless; it must not fail a finished write.
-  }
-}
-
-/** False when the old bytes may exist only in the backup. */
-function restoreAfterFailedRewrite(path: string, contents: string, previous: Buffer): boolean {
-  try {
-    const current = readFileSync(path)
+    const previous = readAll(fd)
     const next = Buffer.from(contents, 'utf-8')
-    // The old file, the whole new one, or someone else's save: leave it as it is.
-    if (
-      current.equals(previous) ||
-      current.equals(next) ||
-      !next.subarray(0, current.length).equals(current)
-    ) {
-      return true
+    try {
+      ftruncateSync(fd, 0)
+      writeAll(fd, next)
+      fsyncSync(fd)
+    } catch (error) {
+      restoreAfterFailedRewrite(fd, next, previous)
+      throw error
     }
-    writeFileSync(path, previous)
-    return true
-  } catch {
-    return false
+    // A rename in the guest after the check above leaves this write on a file no name reaches.
+    if (!namesOpenFile(path, fd)) {
+      throw new Error(`File replaced while Orca rewrote it: ${path}`)
+    }
+  } finally {
+    closeSync(fd)
+  }
+}
+
+function restoreAfterFailedRewrite(fd: number, next: Buffer, previous: Buffer): void {
+  try {
+    const current = readAll(fd)
+    // Only part of this write: anything else was written by someone else, or is whole.
+    if (current.length < next.length && next.subarray(0, current.length).equals(current)) {
+      // Written over the prefix before trimming: a restore that fails midway never empties the file.
+      writeAll(fd, previous)
+      ftruncateSync(fd, previous.length)
+      fsyncSync(fd)
+    }
+  } catch (error) {
+    console.warn('[config-rewrite] Could not restore a file after a failed rewrite:', error)
   }
 }

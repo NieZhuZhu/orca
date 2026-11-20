@@ -25,15 +25,23 @@ vi.mock('../shared-server/codex-daemon-socket-path-guard', async (importOriginal
   codexDaemonSocketPathExceedsLimit: () => false
 }))
 
-const { homedirMock, promotionTestState } = vi.hoisted(() => ({
-  homedirMock: vi.fn<() => string>(),
-  promotionTestState: {
+type PromotionTestState = {
+  failAtomicWrite: boolean
+  atomicWritePaths: string[]
+  // Treated as a WSL guest path, whose next write stops after a prefix with ENOSPC.
+  wslTarget: string | null
+  wslFd: number | null
+}
+
+const { homedirMock, promotionTestState } = vi.hoisted(() => {
+  const state: PromotionTestState = {
     failAtomicWrite: false,
-    atomicWritePaths: [] as string[],
-    // Treated as a WSL guest path, whose next write stops after a prefix with ENOSPC.
-    wslTarget: null as string | null
+    atomicWritePaths: [],
+    wslTarget: null,
+    wslFd: null
   }
-}))
+  return { homedirMock: vi.fn<() => string>(), promotionTestState: state }
+})
 
 vi.mock('../../../../shared/file-access/wsl-paths', async (importOriginal) => {
   const actual = await importOriginal<typeof WslPaths>()
@@ -57,6 +65,22 @@ vi.mock('node:fs', async (importOriginal) => {
         throw Object.assign(new Error('no space left on device'), { code: 'ENOSPC' })
       }
       return actual.writeFileSync(...args)
+    },
+    openSync: (...args: Parameters<typeof actual.openSync>) => {
+      const fd = actual.openSync(...args)
+      if (args[0] === promotionTestState.wslTarget) {
+        promotionTestState.wslFd = fd
+      }
+      return fd
+    },
+    writeSync: (fd: number, buffer: Buffer, ...rest: number[]) => {
+      if (fd === promotionTestState.wslFd) {
+        promotionTestState.wslFd = null
+        promotionTestState.wslTarget = null
+        actual.writeSync(fd, Buffer.from('model ='), 0, 7, 0)
+        throw Object.assign(new Error('no space left on device'), { code: 'ENOSPC' })
+      }
+      return actual.writeSync(fd, buffer, ...rest)
     }
   }
 })
