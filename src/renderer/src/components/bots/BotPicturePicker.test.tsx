@@ -10,10 +10,15 @@ vi.mock('./bot-avatar-upload', async (importOriginal) => ({
 }))
 
 import { BotPicturePicker } from './BotPicturePicker'
+import {
+  resetAvatarCapabilityForTest,
+  seedAvatarCapabilityForTest
+} from './avatar-generation-capability-store'
 
 afterEach(() => {
   cleanup()
   Reflect.deleteProperty(window, 'api')
+  resetAvatarCapabilityForTest()
 })
 
 function renderPicker(onUpload: (png: string, after: number) => void, onChange = vi.fn()) {
@@ -24,6 +29,7 @@ function renderPicker(onUpload: (png: string, after: number) => void, onChange =
       cancel: async () => {}
     }
   })
+  seedAvatarCapabilityForTest([{ agent: 'codex', status: 'ready' }])
   render(
     <TooltipProvider>
       <BotPicturePicker
@@ -86,6 +92,7 @@ describe('BotPicturePicker with its own intake', () => {
         cancel: async () => {}
       }
     })
+    seedAvatarCapabilityForTest([{ agent: 'codex', status: 'ready' }])
     let finish: (png: string) => void = () => {}
     mocks.squareAvatarPng.mockImplementation(
       () => new Promise<string>((resolve) => (finish = resolve))
