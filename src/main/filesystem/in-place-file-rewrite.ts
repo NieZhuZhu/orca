@@ -1,32 +1,58 @@
 import { randomUUID } from 'node:crypto'
-import { readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { join } from 'node:path'
 
 /**
  * Rewrites a file in place, keeping its inode. An in-place write truncates first, so the old bytes
- * go to a new owner-only `<path>.orca-backup-<id>` beforehand. A failed write puts them back only
- * when the file still holds part of this write; the backup stays when that can't be done, and goes
- * once the file is whole again.
+ * are copied to `backupFolder` (Orca's own data) beforehand: beside the file, a backup made from Windows in a
+ * WSL home would get the guest's default permissions, wider than a config holding tokens.
+ * A failed write puts them back only when the file still holds part of this write; the backup
+ * stays when that can't be done, and goes once the file is whole again.
  */
 export function rewriteFileInPlace(
   path: string,
   contents: string,
-  assertCurrent: () => void
+  assertCurrent: () => void,
+  backupFolder: string
 ): void {
+  assertCurrent()
   const previous = readFileSync(path)
-  const backupPath = `${path}.orca-backup-${randomUUID()}`
-  writeFileSync(backupPath, previous, { mode: 0o600, flag: 'wx' })
-  let restored = true
+  mkdirSync(backupFolder, { recursive: true, mode: 0o700 })
+  const backupPath = join(backupFolder, `${randomUUID()}.bak`)
   try {
-    // Backing up takes a round trip over 9P: check for an outside save once more before truncating.
-    assertCurrent()
+    writeFileSync(backupPath, previous, { mode: 0o600, flag: 'wx' })
+  } catch (error) {
+    removeBackup(backupPath)
+    throw error
+  }
+  let restored = true
+  let writing = false
+  try {
+    // Copying the backup takes a round trip: an outside save meanwhile wins over this write.
+    if (!readFileSync(path).equals(previous)) {
+      throw new Error(`File changed while Orca was about to rewrite it: ${path}`)
+    }
+    writing = true
     writeFileSync(path, contents, 'utf-8')
   } catch (error) {
-    restored = restoreAfterFailedRewrite(path, contents, previous)
+    // Nothing was written before the write began, so there is nothing to put back.
+    restored = !writing || restoreAfterFailedRewrite(path, contents, previous)
+    if (!restored) {
+      console.warn('[config-rewrite] Kept the previous contents of', path, 'at', backupPath)
+    }
     throw error
   } finally {
     if (restored) {
-      rmSync(backupPath, { force: true })
+      removeBackup(backupPath)
     }
+  }
+}
+
+function removeBackup(backupPath: string): void {
+  try {
+    rmSync(backupPath, { force: true })
+  } catch {
+    // A leftover copy in Orca's own folder is harmless; it must not fail a finished write.
   }
 }
 
