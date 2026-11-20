@@ -213,7 +213,7 @@ it('reports actual safe branch preservation when forced checkout removal cannot 
   expect(process.exitCode).not.toBe(1)
   expect(existsSync(checkout)).toBe(false)
   expect(await git('rev-parse', 'task')).toBe(head)
-  expect(vi.mocked(console.log)).toHaveBeenCalledWith('removed: true')
+  expect(vi.mocked(console.log)).toHaveBeenCalledWith('removed: true\narchiveHook: none ran')
   expect(vi.mocked(console.error)).toHaveBeenCalledWith(
     'warning: local branch "task" was kept because Git could not safely delete it'
   )
@@ -239,6 +239,11 @@ it.each<{
   {
     label: 'changed since approval',
     answer: { decision: 'run', approvedArchiveHash: hashOrcaHookContent('echo older') },
+    refusal: 'worktree_archive_hook_changed'
+  },
+  {
+    label: 'added after the desktop found none',
+    answer: { decision: 'run', approvedArchiveHash: hashOrcaHookContent('') },
     refusal: 'worktree_archive_hook_changed'
   },
   { label: 'no desktop window', answer: null, refusal: 'worktree_archive_hook_undecided' }
