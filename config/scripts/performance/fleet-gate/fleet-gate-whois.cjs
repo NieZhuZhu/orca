@@ -6,7 +6,7 @@ const base = path.join(root, dir, 'out/main')
 const files = fs.readdirSync(path.join(base, 'chunks')).map((f) => 'chunks/' + f).concat(['index.js'])
 const wanted = JSON.parse(process.argv[3])
 for (const [prefix, line, names] of wanted) {
-  const file = files.find((f) => f.startsWith(prefix))
+  const file = files.find((f) => f === prefix || f.startsWith('chunks/' + prefix) || f.startsWith(prefix))
   if (!file) { console.log('WHOIS missing', prefix); continue }
   const text = fs.readFileSync(path.join(base, file), 'utf8').split('\n')[line - 1] ?? ''
   for (const name of names) {
