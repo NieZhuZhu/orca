@@ -141,7 +141,7 @@
 1 src/main/codex/configuration/settings/codex-config-path-reference-rewrite.ts
 1 src/main/codex/configuration/settings/config-settings-baseline.ts
 5 src/main/codex/configuration/settings/config-settings-promotion-write-target.ts
-3 src/main/codex/configuration/settings/config-settings-promotion.ts
+2 src/main/codex/configuration/settings/config-settings-promotion.ts
 1 src/main/codex/configuration/shared-server/codex-daemon-socket-path-guard.ts
 6 src/main/codex/configuration/toml/config-toml-atomic-write.ts
 4 src/main/codex/history/backfill/codex-session-backfill-marker.ts
@@ -238,6 +238,7 @@
 14 src/main/filesystem/atomic-file-publication.ts
 9 src/main/filesystem/durable-file-write.ts
 3 src/main/filesystem/file-content-observation.ts # Existing reads/existence checks relocated from observed callers; no new synchronous I/O.
+6 src/main/filesystem/in-place-file-rewrite.ts # WSL config promotion only, when a promoted setting changes: backup, rewrite in place and restore over 9P (#45247)
 2 src/main/filesystem/local-file-io/filesystem-path-containment.ts
 3 src/main/filesystem/rolling-file-backup.ts # +1 Windows-only chmod inside the existing sync backup copy: clears the read-only attribute so a later rename over the backup cannot fail (STA-16113)
 2 src/main/foreign-sqlite-readers/foreign-sqlite-reader-entry-path.ts

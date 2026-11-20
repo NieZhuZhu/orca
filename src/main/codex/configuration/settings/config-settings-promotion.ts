@@ -188,7 +188,9 @@ function promoteCodexRuntimeSettingsToSystemUnsafe(
   if (targetExists && parseWslUncPath(writeTarget.path)) {
     // WSL 9P symlink metadata is unreliable; write through to preserve the guest inode.
     assertGuardedFileCurrent(writeTarget.path)
-    rewriteFileInPlace(writeTarget.path, nextContent)
+    rewriteFileInPlace(writeTarget.path, nextContent, () =>
+      assertGuardedFileCurrent(writeTarget.path)
+    )
     observeFilePublication(writeTarget.path, nextContent)
     return { conflicts, runtimeValuesToPreserve, mirroredMcpServers, mirroredMcpServerRoot }
   }
