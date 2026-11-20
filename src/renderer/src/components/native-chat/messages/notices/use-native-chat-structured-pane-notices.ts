@@ -138,10 +138,9 @@ export function useNativeChatStructuredPaneNotices({
   if (hostNotice) {
     notices.push(hostNotice)
   }
-  // One Sign in on screen: while the composer's notice or Antigravity's sign-in strip has it,
-  // transcript rows only say what wasn't sent.
-  const signInInComposer =
-    install.signIn !== null || notices.some((notice) => notice.signIn !== undefined)
+  // One Sign in on screen: while the composer's notice has it, transcript rows only say what
+  // wasn't sent.
+  const signInInComposer = notices.some((notice) => notice.signIn !== undefined)
   // A new bot's setup card offers the kickoff's sign-in, so the composer doesn't repeat it.
   const shown = kickoffOwed ? notices.filter((notice) => notice.signIn === undefined) : notices
   const rowSetup = useMemo(() => ({ ...setup, signInInComposer }), [setup, signInInComposer])

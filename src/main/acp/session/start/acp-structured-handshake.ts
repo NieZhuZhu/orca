@@ -96,7 +96,6 @@ export async function initializeAcpStructuredSession(
   const setup = {
     ...acpSessionStartMeta(spec, meta),
     authMethodId,
-    authMethodUnavailableMessage: spec.authMethodUnavailableMessage,
     resumePreference: spec.resumePreference
   }
   const resume = launch.resume
